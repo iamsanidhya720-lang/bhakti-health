@@ -113,7 +113,27 @@ textarea:focus{border-color:var(--gold);box-shadow:0 0 28px rgba(212,175,55,.25)
   .input-area{padding:12px 14px 20px}
   textarea{font-size:16px;padding:12px 60px 12px 16px;min-height:46px}
   .back-btn span{display:none}
+  .screen-box{padding:28px 20px;margin:16px}
+  .screen-opts{grid-template-columns:1fr 1fr}
 }
+
+/* Screening Popup */
+#screening{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);backdrop-filter:blur(12px);align-items:center;justify-content:center;padding:16px}
+.screen-box{background:linear-gradient(135deg,rgba(26,11,46,.97),rgba(15,15,35,.97));border:1px solid var(--border);border-radius:24px;padding:40px 36px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;animation:popIn .4s cubic-bezier(.23,1,.32,1)}
+@keyframes popIn{from{opacity:0;transform:scale(.92) translateY(20px)}to{opacity:1;transform:none}}
+.screen-box::-webkit-scrollbar{width:4px}
+.screen-box::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+.screen-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.screen-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,#fff,var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.screen-count{font-size:13px;color:var(--muted);font-weight:600}
+.progress-bar{width:100%;height:5px;background:rgba(255,255,255,.1);border-radius:10px;margin-bottom:28px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--gold));border-radius:10px;transition:width .5s ease}
+.screen-q{font-size:16px;line-height:1.6;margin-bottom:24px;color:var(--fg);font-weight:500}
+.screen-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.screen-opt{padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;font-size:14px;color:var(--fg);text-align:left;transition:.25s;line-height:1.4}
+.screen-opt:hover{background:rgba(79,143,247,.12);border-color:rgba(79,143,247,.4);transform:translateY(-1px)}
+.screen-opt.picked{background:rgba(212,175,55,.2);border-color:rgba(212,175,55,.6);color:var(--gold)}
+.screen-note{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;opacity:.8}
 </style>
 </head>
 <body>
@@ -136,6 +156,20 @@ textarea:focus{border-color:var(--gold);box-shadow:0 0 28px rgba(212,175,55,.25)
       <p class="subtitle"><span id="tw" class="typewriter"></span></p>
       <button class="cta" onclick="startChat()">Start Your Journey</button>
     </div>
+  </div>
+</div>
+
+<!-- Screening Popup -->
+<div id="screening">
+  <div class="screen-box">
+    <div class="screen-top">
+      <div class="screen-title">Quick Check-in 🧠</div>
+      <div class="screen-count" id="screenCount">1 / 15</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:6.6%"></div></div>
+    <div class="screen-q" id="screenQ"></div>
+    <div class="screen-opts" id="screenOpts"></div>
+    <div class="screen-note">Tumhare answers sirf Dr. Aisha ke saath share honge 🔒</div>
   </div>
 </div>
 
@@ -181,6 +215,97 @@ function type(){
   setTimeout(type,speed);
 }
 setTimeout(type,2000);
+
+// Screening Questions
+const QUESTIONS=[
+  {q:"Over the past two weeks, how often have you felt sad, empty, or hopeless?",opts:["Not at all","Occasionally (1–2 days)","More than half the days","Nearly every day"]},
+  {q:"How often do you lose interest in activities you normally enjoy?",opts:["Never","Sometimes","Often","Almost always"]},
+  {q:"How would you describe your sleep pattern recently?",opts:["Sleeping normally","Slight trouble sleeping","Difficulty sleeping most nights","Severe insomnia or excessive sleeping"]},
+  {q:"How often do you feel nervous, anxious, or on edge?",opts:["Rarely","Sometimes","Frequently","Almost constantly"]},
+  {q:"How well are you able to concentrate on work, studies, or daily tasks?",opts:["No difficulty concentrating","Slight difficulty sometimes","Frequent difficulty concentrating","Severe inability to focus"]},
+  {q:"How often do you feel physically tired or drained without a clear reason?",opts:["Rarely","Occasionally","Most days","Almost every day"]},
+  {q:"How often do you find yourself overthinking or worrying about the future?",opts:["Rarely","Sometimes","Often","Constantly"]},
+  {q:"How satisfied are you with your relationships (friends, family, partner)?",opts:["Very satisfied","Somewhat satisfied","Mostly dissatisfied","Completely dissatisfied"]},
+  {q:"How often do you feel overwhelmed by responsibilities or life situations?",opts:["Rarely","Sometimes","Often","Almost always"]},
+  {q:"How would you describe your motivation to complete tasks?",opts:["Highly motivated","Slightly reduced motivation","Often procrastinate","Very little motivation to do anything"]},
+  {q:"How often do you feel irritable, frustrated, or angry without a strong reason?",opts:["Rarely","Occasionally","Often","Almost always"]},
+  {q:"How often do you feel disconnected or emotionally numb?",opts:["Never","Sometimes","Frequently","Almost constantly"]},
+  {q:"How often do you avoid social interaction or isolate yourself?",opts:["Rarely","Occasionally","Often","Almost always"]},
+  {q:"Have you had thoughts that life is meaningless or not worth living?",opts:["Never","Occasionally","Often","Very frequently"]},
+  {q:"How much does your mental state affect your work, studies, or daily functioning?",opts:["Not at all","Slightly","Moderately","Severely"]}
+];
+
+let screenIdx=0, screenScores=[], screenAnswers=[];
+
+function showScreening(){
+  el('landing').style.display='none';
+  el('screening').style.display='flex';
+  screenIdx=0; screenScores=[]; screenAnswers=[];
+  renderQuestion();
+}
+
+function renderQuestion(){
+  const q=QUESTIONS[screenIdx];
+  el('screenQ').textContent=q.q;
+  el('screenCount').textContent=`${screenIdx+1} / 15`;
+  el('progressFill').style.width=`${((screenIdx)/15)*100}%`;
+  const opts=el('screenOpts');
+  opts.innerHTML='';
+  q.opts.forEach((opt,i)=>{
+    const btn=document.createElement('button');
+    btn.className='screen-opt';
+    btn.textContent=`${['A','B','C','D'][i]}) ${opt}`;
+    btn.onclick=()=>pickAnswer(i,opt);
+    opts.appendChild(btn);
+  });
+}
+
+function pickAnswer(score, text){
+  // Highlight selection briefly
+  document.querySelectorAll('.screen-opt').forEach((b,i)=>{
+    b.disabled=true;
+    if(i===score) b.classList.add('picked');
+  });
+  screenScores.push(score);
+  screenAnswers.push({q:QUESTIONS[screenIdx].q, a:text, score});
+
+  setTimeout(()=>{
+    screenIdx++;
+    if(screenIdx<15){
+      renderQuestion();
+    } else {
+      finishScreening();
+    }
+  }, 350);
+}
+
+function finishScreening(){
+  el('progressFill').style.width='100%';
+  const total=screenScores.reduce((a,b)=>a+b,0);
+  let level, emoji;
+  if(total<=10){level='Mentally stable range';emoji='🟢';}
+  else if(total<=20){level='Mild psychological distress';emoji='🟡';}
+  else if(total<=30){level='Moderate mental health concern';emoji='🟠';}
+  else{level='High distress — professional support recommended';emoji='🔴';}
+
+  // Build summary for AI
+  const summary=`[SCREENING RESULTS]\nTotal Score: ${total}/45\nLevel: ${level}\n\nDetailed Answers:\n`+
+    screenAnswers.map((a,i)=>`Q${i+1}: ${a.q}\nAnswer: ${a.a} (score: ${a.score})`).join('\n\n');
+
+  // Open chat
+  el('screening').style.display='none';
+  el('chat').style.display='flex';
+
+  // Opening message from Dr. Aisha using screening data
+  const opening=`Hey yaar! 🌟 Main Dr. Aisha hun — tumhari safe space.\n\nTumhara quick check-in dekha maine ${emoji} Score ${total}/45 — ${level}.\n\nKoi judgment nahi hai bilkul. Yeh results sirf hamari conversation ko better banane ke liye hain. Ab batao freely — kya chal raha hai life mein? 💙`;
+  addMsg(opening,false);
+
+  // Send screening data silently to AI as context
+  history.push({role:'user',content:summary});
+  history.push({role:'assistant',content:opening});
+
+  setTimeout(()=>el('input').focus(),300);
+}
 
 // State
 let busy=false;
@@ -277,17 +402,13 @@ async function send(){
 }
 
 function startChat(){
-  el('landing').style.display='none';
-  el('chat').style.display='flex';
-  const opening="Hey yaar! 🌟 Main Dr. Aisha hun — tumhari safe space. No cap, yahan koi judgment nahi hai bilkul. Jo bhi dil mein chal raha hai, freely share kar sakte ho.\n\nBatao, aaj kaisi vibes hain? Kya chal raha hai life mein?";
-  addMsg(opening,false);
-  history.push({role:'assistant',content:opening});
-  setTimeout(()=>el('input').focus(),300);
+  showScreening();
 }
 
 function goBack(){
   if(history.length>1&&!confirm('Session end karna hai? Conversation save nahi hogi.'))return;
   el('chat').style.display='none';
+  el('screening').style.display='none';
   el('landing').style.display='flex';
   el('msgs').innerHTML='';
   history.length=0;busy=false;
